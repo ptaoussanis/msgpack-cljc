@@ -37,7 +37,7 @@ Thanks for the original work!
 
 ### Clojure data structures to bytes and back
 
-* `pack`: Serialize object as a sequence of java.lang.Bytes.
+* `pack`: Serialize object as byte-array (Clojure) or UInt8Array (ClojureScript).
 * `unpack` Deserialize bytes as a Clojure object.
 
 If you stick to a JSON like data structure then your msgpack data will be readable by other languages.  This has been used in production to talk with python services for a few years.  Otherwise if you are in an a pure clj/cljs system then you can use keywords, symbols, ratios, and sets as well.
@@ -244,7 +244,7 @@ You can also define your own Extended types with `extend-msgpack`.
 
 (extend-msgpack
   Person
-  100
+  105 ;; type id between 105--128.
   [p] (.getBytes (:name p))
   [bytes] (->Person (String. bytes)))
 
