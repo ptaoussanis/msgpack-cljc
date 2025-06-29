@@ -1,6 +1,6 @@
 (ns msgpack.pack
   (:require
-    [msgpack.interface :refer [Packable pack-bytes Extended unpack-extended]]
+    [msgpack.interface :refer [Packable pack-bytes Extended unpack-extended ->Extended]]
     [msgpack.stream :as stream]
     [cljs.reader :refer [parse-timestamp]]))
 
@@ -335,7 +335,9 @@
       101 (int-array-deserializer (stream/read stream n))
       102 (float-array-deserializer (stream/read stream n))
       103 (double-array-deserializer (stream/read stream n))
-      104 (byte-array-deserializer (stream/read stream n)))))
+      104 (byte-array-deserializer (stream/read stream n))
+      ;; else use extension multimethod
+      (unpack-extended (->Extended type (stream/read stream n))))))
 
 
 (defn unpack
