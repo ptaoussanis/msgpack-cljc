@@ -14,6 +14,5 @@
   "Refine Extended type to an application-specific type."
   :type)
 
-; By default we dispatch on the extension byte
+;; By default we dispatch on the extension byte
 (defmethod unpack-extended :default [ext] ext)
-
