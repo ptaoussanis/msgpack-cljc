@@ -223,32 +223,29 @@
 (extend CLASS-OF-BYTE-ARRAY           Packable {:pack-bytes (fn [a     ^DataOutput s] (pack-bytes (byte-array a) s))})
 (extend CLASS-OF-PRIMITIVE-BYTE-ARRAY Packable {:pack-bytes (fn [bytes ^DataOutput s] (pack-byte-array bytes     s))})
 
-(defn pack-stream
-  "Serialize application value as a stream of MessagePack-formatted bytes.
-  Argument type can be either java.io.DataOutput or java.io.OutputStream. Any
-  other type is an error."
-  [obj stream]
-  (condp instance? stream
-    DataOutput   (pack-bytes  obj stream)
-    OutputStream (pack-stream obj (DataOutputStream. stream))))
-
 (defn pack
-  "Serialize application value as a MessagePack-formatted byte array"
-  [obj]
-  (let [stream (ByteArrayOutputStream.)]
-    (pack-stream obj stream)
-    (.toByteArray    stream)))
+  (^bytes [clj] (let [baos (ByteArrayOutputStream.)] (pack baos clj) (.toByteArray baos)))
+  ([output clj]
+   (cond
+     (instance? DataOutput   output) (pack-bytes clj                                  output)
+     (instance? OutputStream output) (pack-bytes clj (DataOutputStream. ^OutputStream output))
+     :else
+     (throw
+       (ex-info "Pack failed: unexpected `output` type"
+         {:given {:value output, :type (type output)}
+          :expected '#{DataOutput OutputStream}})))))
 
-(defn unpack
-  "Deserialize MessagePack-formatted bytes to an application value. Argument
-  type can be either java.io.DataInput, java.io.InputStream, or byte array.
-  Other types are coerced to a byte array."
-  [obj]
-  (condp instance? obj
-    DataInput   (unpack-stream obj)
-    InputStream (unpack (DataInputStream. obj))
-    CLASS-OF-PRIMITIVE-BYTE-ARRAY (unpack (ByteArrayInputStream. obj))
-    (unpack (byte-array obj))))
+(defn unpack [packed]
+  (cond
+    (bytes?                packed) (unpack-stream (DataInputStream. (ByteArrayInputStream.             packed)))
+    (instance? DataInput   packed) (unpack-stream                                                      packed)
+    (instance? InputStream packed) (unpack-stream (DataInputStream.                                    packed))
+    (seq?                  packed) (unpack-stream (DataInputStream. (ByteArrayInputStream. (byte-array packed))))
+    :else
+    (throw
+      (ex-info "Unpack failed: unexpected `packed` type"
+        {:given {:value packed, :type (type packed)}
+         :expected '#{bytes DataInput InputStream }}))))
 
 ;;;;
 

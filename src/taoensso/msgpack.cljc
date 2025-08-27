@@ -1,8 +1,29 @@
 (ns taoensso.msgpack
+  "Clj/s MessagePack implementation adapted from `msgpack-cljc` by @rosejn."
   (:require [taoensso.msgpack.impl :as impl]))
 
-(defn pack   [clj]   (impl/pack   clj))
-(defn unpack [bytes] (impl/unpack bytes))
+#?(:clj
+   (defn pack
+     "1 arity: returns MessagePack-encoded byte[] for given Clj value.
+      2 arity: writes  MessagePack-encoded bytes  for given Clj value to
+        given output ∈ #{DataOutput OutputStream} and returns output."
+     (^bytes [clj] (impl/pack        clj))
+     ([output clj] (impl/pack output clj) output))
 
-(defn pack-stream   [clj out-stream] (impl/pack-stream clj out-stream))
-(defn unpack-stream [in-stream]      (impl/unpack-stream    in-stream))
+   :cljs
+   (defn pack
+     "1 arity: returns MessagePack-encoded Uint8Array for given Cljs value.
+      2 arity: writes  MessagePack-encoded bytes      for given Cljs value to
+        given output ∈ #{ArrayBuffer} and returns output."
+     ([       clj] (impl/pack        clj))
+     ([output clj] (impl/pack output clj) output)))
+
+#?(:clj
+   (defn unpack
+     "Returns Clj value for given MessagePack-encoded payload ∈ #{byte[] DataInput InputStream}."
+     [packed] (impl/unpack packed))
+
+   :cljs
+   (defn unpack
+     "Returns Cljs value for given MessagePack-encoded payload ∈ #{Uint8Array}."
+     [packed] (impl/unpack packed)))

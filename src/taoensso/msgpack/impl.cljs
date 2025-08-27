@@ -8,14 +8,6 @@
 
 ;;;; Streams
 
-(def MSGPACK-STREAM-DEFAULT-SIZE
-  "When new output-stream is created we need to allocate a buffer to store
-  the serialized bytes.  Using a fairly large size is ideal so we don't incur
-  lots of memory copies when forming large messages."
-  ;; TODO: make this configurable so we can reduce cost if we know we're
-  ;; sending large messages
-  2048)
-
 (defn string->bytes [s] (js/Uint8Array. (.stringToUtf8ByteArray goog.crypt s)))
 (defn bytes->string [bs]                (.utf8ByteArrayToString goog.crypt bs))
 
@@ -115,10 +107,8 @@
       (write-i32 this ^js/Number (.getHighBits glong))
       (write-i32 this ^js/Number (.getLowBits  glong)))))
 
-(defn output-stream [] (MsgpackOutputStream. (js/DataView. (js/ArrayBuffer. MSGPACK-STREAM-DEFAULT-SIZE)) 0))
-(defn  input-stream [buffer]
-  (let [ab (if (instance? js/Uint8Array buffer) (.-buffer buffer) buffer)]
-    (MsgpackInputStream. (js/DataView. ab) 0)))
+(defn  input-stream [input]  (MsgpackInputStream.  (js/DataView. input)  0))
+(defn output-stream [output] (MsgpackOutputStream. (js/DataView. output) 0))
 
 ;;;;
 
@@ -169,7 +159,7 @@
 (defprotocol     IExtendable (extension [this]))
 (extend-protocol IExtendable
   PersistentHashSet (extension [this] (Extended. 0x07 (pack (vec this))))
-  Keyword           (extension [this] (Extended. 0x03 (pack (.substring (str this) 1) (output-stream))))
+  Keyword           (extension [this] (Extended. 0x03 (pack (.substring (str this) 1))))
   cljs.core.Symbol  (extension [this] (Extended. 0x04 (pack (str this)))))
 
 (defn pack-extended [s {:keys [type data]}]
@@ -309,10 +299,11 @@
       ;; else use extension multimethod
       (unpack-extended (->Extended type (read-1 stream n))))))
 
-(defn unpack [buffer] (unpack-stream (input-stream buffer)))
-(defn pack   [data]
-  (let [stream (output-stream)]
-    (pack-bytes data stream)
-    (stream->uint8array stream)))
+(defn pack
+  ([       clj] (let [os (output-stream (js/ArrayBuffer. 2047))] (pack-bytes clj os) (stream->uint8array os)))
+  ([output clj] (let [os (output-stream output)]                 (pack-bytes clj os))))
 
-(defn pack-stream [data stream] (pack-bytes data stream))
+(defn unpack [packed]
+  (cond
+    (instance? js/Uint8Array packed) (unpack-stream (input-stream (.-buffer packed)))
+    :else                            (unpack-stream (input-stream           packed))))
