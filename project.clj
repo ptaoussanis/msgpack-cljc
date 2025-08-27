@@ -1,4 +1,4 @@
-(defproject msgpack-cljc "2.0.0"
+(defproject com.taoensso.forks/msgpack-cljc "2.1.0-SNAPSHOT"
   :description "A Clojure(script) implementation of the MessagePack spec with full compatibility from server to browser."
   :url "https://github.com/rosejn/msgpack-cljc"
   :license {:name "The MIT License (MIT)"
