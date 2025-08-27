@@ -3,7 +3,7 @@
    [goog.crypt]
    [goog.math.Long]
    [cljs.reader]
-   [taoensso.msgpack.interfaces :as interfaces
+   [taoensso.msgpack.interfaces :as i
     :refer [Packable CustomPackable pack-bytes]]))
 
 ;;;; Streams
@@ -296,8 +296,8 @@
       102 (float-array-deserializer  (read-1 stream n))
       103 (double-array-deserializer (read-1 stream n))
       104 (byte-array-deserializer   (read-1 stream n))
-      (interfaces/unpack-custom
-        (interfaces/CustomPackable. byte-id (read-1 stream n))))))
+      (i/unpack-custom
+        (i/->CustomPackable byte-id  (read-1 stream n))))))
 
 (defn pack
   ([       clj] (let [os (output-stream (js/ArrayBuffer. 2047))] (pack-bytes clj os) (stream->uint8array os)))

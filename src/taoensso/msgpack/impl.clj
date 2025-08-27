@@ -1,14 +1,12 @@
 (ns taoensso.msgpack.impl
-  (:require [taoensso.msgpack.interfaces :as interfaces :refer [Packable pack-bytes]])
+  (:require [taoensso.msgpack.interfaces :as i :refer [Packable pack-bytes]])
   (:import
    [taoensso.msgpack.interfaces CustomPackable]
    [java.nio ByteBuffer ByteOrder]
-   [java.nio.charset Charset]
+   [java.nio.charset StandardCharsets]
    [java.io
     ByteArrayInputStream ByteArrayOutputStream DataInput DataOutput
     DataInputStream DataOutputStream InputStream OutputStream]))
-
-(def ^:private ^Charset MSGPACK-CHARSET (Charset/forName "UTF-8"))
 
 (defmacro cond-let
   {:clj-kondo/lint-as 'clojure.core/let}
@@ -81,7 +79,7 @@
   java.lang.String
   (pack-bytes
     [str ^DataOutput s]
-    (let [bytes (.getBytes ^String str MSGPACK-CHARSET)]
+    (let [bytes (.getBytes ^String str StandardCharsets/UTF_8)]
       (pack-str bytes s)))
 
   CustomPackable
@@ -139,16 +137,12 @@
 
 (defn- read-str [n ^DataInput data-input]
   (let [bytes (read-bytes n data-input)]
-    (String. ^bytes bytes MSGPACK-CHARSET)))
+    (String. ^bytes bytes StandardCharsets/UTF_8)))
 
 (declare unpack-stream)
 
-(defn- unpack-custom [n ^DataInput data-input]
-  (interfaces/unpack-custom
-    (interfaces/->CustomPackable
-      (.readByte data-input) (read-bytes n data-input))))
-
-(defn- unpack-n [n ^DataInput data-input]
+(defn- unpack-custom [n ^DataInput data-input] (i/unpack-custom (i/->CustomPackable (.readByte data-input) (read-bytes n data-input))))
+(defn- unpack-n      [n ^DataInput data-input]
   (loop [i 0
          v (transient [])]
     (if (< i n)
@@ -260,7 +254,7 @@
   `(let [byte-id# ~byte-id]
      (assert (<= 0 byte-id# 127) "[-1, -128]: reserved for future pre-defined extensions.")
      (extend-protocol Packable ~class (pack-bytes [~@pack-args o#] (pack-bytes (CustomPackable. byte-id# ~pack-form) o#)))
-     (defmethod interfaces/unpack-custom byte-id# [cp#]
+     (defmethod i/unpack-custom byte-id# [cp#]
        (let [~@unpack-args (get cp# :ba-content)]
          ~unpack-form))))
 
