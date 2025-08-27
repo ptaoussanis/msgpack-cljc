@@ -107,7 +107,7 @@
   (write-f64 [this f64] (resize-on-demand! this 8) (.setFloat64 bytes offset f64 false) (inc-offset! this 8))
   (write-i64 [this u64]
     ;; msgpack stores integers in big-endian
-    (let [glong (goog.math.Long/fromNumber u64)]
+    (let [glong (.fromNumber goog.math.Long u64)]
       (write-i32 this ^js/Number (.getHighBits glong))
       (write-i32 this ^js/Number (.getLowBits  glong)))))
 
