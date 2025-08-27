@@ -1,17 +1,12 @@
-(ns msgpack.pack
-  (:require [msgpack.interface :refer [Packable pack-bytes unpack-extended ->Extended]])
+(ns taoensso.msgpack.impl
+  (:require [taoensso.msgpack.interfaces :refer [Packable pack-bytes unpack-extended ->Extended]])
   (:import
-   [msgpack.interface Extended]
+   [taoensso.msgpack.interfaces Extended]
    [java.nio ByteBuffer ByteOrder]
-   java.io.ByteArrayInputStream
-   java.io.ByteArrayOutputStream
-   java.io.DataInput
-   java.io.DataInputStream
-   java.io.DataOutput
-   java.io.DataOutputStream
-   java.io.InputStream
-   java.io.OutputStream
-   java.nio.charset.Charset))
+   [java.nio.charset Charset]
+   [java.io
+    ByteArrayInputStream ByteArrayOutputStream DataInput DataOutput
+    DataInputStream DataOutputStream InputStream OutputStream]))
 
 (def ^:private ^Charset MSGPACK-CHARSET (Charset/forName "UTF-8"))
 

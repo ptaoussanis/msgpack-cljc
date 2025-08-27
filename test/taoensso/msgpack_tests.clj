@@ -1,16 +1,16 @@
-(ns msgpack.tests
+(ns taoensso.msgpack-tests
   (:require
    [clojure.test :refer [deftest testing is]]
    [clojure.test.check.clojure-test :refer [defspec]]
    [clojure.test.check.generators :as gen]
    [clojure.test.check.properties :as prop]
 
-   [msgpack.core :as msg]
-   [msgpack.interface :refer [->Extended]]))
+   [taoensso.msgpack :as msg]
+   [taoensso.msgpack.interfaces :refer [->Extended]]))
 
 (comment
-  (remove-ns      'msgpack.tests)
-  (test/run-tests 'msgpack.tests))
+  (remove-ns      'taoensso.msgpack.tests)
+  (test/run-tests 'taoensso.msgpack.tests))
 
 (defn- byte-array? [v] (instance? (Class/forName "[B") v))
 (defn- bigdecimal? [v] (instance? java.math.BigDecimal v))

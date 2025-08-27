@@ -1,9 +1,10 @@
-(ns msgpack.pack
+(ns taoensso.msgpack.impl
   (:require
    [goog.crypt]
    [goog.math.Long]
    [cljs.reader]
-   [msgpack.interface :refer [Packable pack-bytes Extended unpack-extended ->Extended]]))
+   [taoensso.msgpack.interfaces
+    :refer [Packable pack-bytes Extended unpack-extended ->Extended]]))
 
 ;;;; Streams
 

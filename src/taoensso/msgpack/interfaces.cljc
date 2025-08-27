@@ -1,4 +1,4 @@
-(ns msgpack.interface)
+(ns taoensso.msgpack.interfaces)
 
 (defprotocol Packable
   "Pack this application data type into bytes on an output stream."

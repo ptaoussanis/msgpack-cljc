@@ -1,8 +1,8 @@
-(ns msgpack.tests
+(ns taoensso.msgpack.tests
   (:require
    [clojure.test :as test :refer [deftest testing is]]
-   [msgpack.core :as msg]
-   [msgpack.interface :refer [->Extended]]))
+   [taoensso.msgpack :as msg]
+   [taoensso.msgpack.interfaces :refer [->Extended]]))
 
 (defmethod test/report [:cljs.test/default :end-run-tests] [m]
   (when-not (test/successful? m)
