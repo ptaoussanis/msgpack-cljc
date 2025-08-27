@@ -111,5 +111,7 @@
       (write-i32 this ^js/Number (.getHighBits glong))
       (write-i32 this ^js/Number (.getLowBits  glong)))))
 
-(defn input-stream  [buffer] (MsgpackInputStream.  (js/DataView. buffer) 0))
-(defn output-stream []       (MsgpackOutputStream. (js/DataView. (js/ArrayBuffer. MSGPACK-STREAM-DEFAULT-SIZE)) 0))
+(defn output-stream [] (MsgpackOutputStream. (js/DataView. (js/ArrayBuffer. MSGPACK-STREAM-DEFAULT-SIZE)) 0))
+(defn  input-stream [buffer]
+  (let [ab (if (instance? js/Uint8Array buffer) (.-buffer buffer) buffer)]
+    (MsgpackInputStream. (js/DataView. ab) 0)))
