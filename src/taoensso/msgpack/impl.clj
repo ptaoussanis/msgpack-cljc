@@ -1,7 +1,7 @@
 (ns taoensso.msgpack.impl
-  (:require [taoensso.msgpack.interfaces :refer [Packable pack-bytes unpack-extended ->Extended]])
+  (:require [taoensso.msgpack.interfaces :as interfaces :refer [Packable pack-bytes]])
   (:import
-   [taoensso.msgpack.interfaces Extended]
+   [taoensso.msgpack.interfaces CustomPackable]
    [java.nio ByteBuffer ByteOrder]
    [java.nio.charset Charset]
    [java.io
@@ -84,23 +84,25 @@
     (let [bytes (.getBytes ^String str MSGPACK-CHARSET)]
       (pack-str bytes s)))
 
-  Extended
-  (pack-bytes
-    [e ^DataOutput s]
-    (let [type (:type e)
-          ^bytes data (:data e)
-          len (count data)]
-      (cond
-        (= len 1)  (.writeByte s 0xd4)
-        (= len 2)  (.writeByte s 0xd5)
-        (= len 4)  (.writeByte s 0xd6)
-        (= len 8)  (.writeByte s 0xd7)
-        (= len 16) (.writeByte s 0xd8)
-        (<= len 0xff)       (do (.writeByte s 0xc7) (.writeByte  s len))
-        (<= len 0xffff)     (do (.writeByte s 0xc8) (.writeShort s len))
-        (<= len 0xffffffff) (do (.writeByte s 0xc9) (.writeInt   s len)))
-      (.writeByte s type)
-      (.write     s data)))
+  CustomPackable
+  (pack-bytes [cp ^DataOutput s]
+    (let [bid       (.-byte-id    cp)
+          ^bytes ba (.-ba-content cp)
+          len       (alength ba)]
+
+      (case len
+        1  (.writeByte s 0xd4)
+        2  (.writeByte s 0xd5)
+        4  (.writeByte s 0xd6)
+        8  (.writeByte s 0xd7)
+        16 (.writeByte s 0xd8)
+        (cond
+          (<= len 0xff)       (do (.writeByte s 0xc7) (.writeByte  s len))
+          (<= len 0xffff)     (do (.writeByte s 0xc8) (.writeShort s len))
+          (<= len 0xffffffff) (do (.writeByte s 0xc9) (.writeInt   s len))))
+
+      (.writeByte s bid)
+      (.write     s ba)))
 
   clojure.lang.Sequential
   (pack-bytes [seq ^DataOutput s]
@@ -141,9 +143,10 @@
 
 (declare unpack-stream)
 
-(defn- unpack-ext [n ^DataInput data-input]
-  (unpack-extended
-    (->Extended (.readByte data-input) (read-bytes n data-input))))
+(defn- unpack-custom [n ^DataInput data-input]
+  (interfaces/unpack-custom
+    (interfaces/->CustomPackable
+      (.readByte data-input) (read-bytes n data-input))))
 
 (defn- unpack-n [n ^DataInput data-input]
   (loop [i 0
@@ -199,15 +202,15 @@
     (= byte 0xc5) (read-bytes (read-uint16 data-input) data-input)
     (= byte 0xc6) (read-bytes (read-uint32 data-input) data-input)
 
-    ;; ext format family
-    (= byte 0xd4) (unpack-ext 1  data-input)
-    (= byte 0xd5) (unpack-ext 2  data-input)
-    (= byte 0xd6) (unpack-ext 4  data-input)
-    (= byte 0xd7) (unpack-ext 8  data-input)
-    (= byte 0xd8) (unpack-ext 16 data-input)
-    (= byte 0xc7) (unpack-ext (read-uint8 data-input) data-input)
-    (= byte 0xc8) (unpack-ext (read-uint16 data-input) data-input)
-    (= byte 0xc9) (unpack-ext (read-uint32 data-input) data-input)
+    ;; custom format family
+    (= byte 0xd4) (unpack-custom 1            data-input)
+    (= byte 0xd5) (unpack-custom 2            data-input)
+    (= byte 0xd6) (unpack-custom 4            data-input)
+    (= byte 0xd7) (unpack-custom 8            data-input)
+    (= byte 0xd8) (unpack-custom 16           data-input)
+    (= byte 0xc7) (unpack-custom (read-uint8  data-input) data-input)
+    (= byte 0xc8) (unpack-custom (read-uint16 data-input) data-input)
+    (= byte 0xc9) (unpack-custom (read-uint32 data-input) data-input)
 
     ;; array format family
     (= (bit-and 2r11110000 byte) 2r10010000) (unpack-n (bit-and 2r1111 byte) data-input)
@@ -249,22 +252,17 @@
 
 ;;;;
 
-(defmacro extend-msgpack
-  {:clj-kondo/ignore [:unresolved-symbol]}
-  [class type-num pack-form unpack-form]
-  (let [[pack-fn   pack-args   pack]   pack-form
-        [unpack-fn unpack-args unpack] unpack-form]
+(defmacro extend-custom
+  [byte-id class
+   [_   pack-args   pack-form]
+   [_ unpack-args unpack-form]]
 
-    `(let [type# ~type-num]
-       (assert (<= 0 type# 127) "[-1, -128]: reserved for future pre-defined extensions.")
-       (extend-protocol Packable
-         ~class
-         (pack-bytes [~@pack-args s#]
-           (pack-bytes (->Extended type# ~pack) s#)))
-
-       (defmethod unpack-extended type# [ext#]
-         (let [~@unpack-args (:data ext#)]
-           ~unpack)))))
+  `(let [byte-id# ~byte-id]
+     (assert (<= 0 byte-id# 127) "[-1, -128]: reserved for future pre-defined extensions.")
+     (extend-protocol Packable ~class (pack-bytes [~@pack-args o#] (pack-bytes (CustomPackable. byte-id# ~pack-form) o#)))
+     (defmethod interfaces/unpack-custom byte-id# [cp#]
+       (let [~@unpack-args (get cp# :ba-content)]
+         ~unpack-form))))
 
 (defn- keyword->str
   "Convert keyword to string with namespace preserved.
@@ -272,76 +270,67 @@
   [k]
   (subs (str k) 1))
 
-(extend-msgpack
-  clojure.lang.Keyword 3
-  (pack   [k]     (pack (keyword->str k)))
-  (unpack [bytes] (keyword (unpack bytes))))
+(extend-custom 3 clojure.lang.Keyword
+  (pack   [k]  (pack (keyword->str k)))
+  (unpack [ba] (keyword (unpack ba))))
 
-(extend-msgpack
-  clojure.lang.Symbol 4
-  (pack   [s]     (pack (str s)))
-  (unpack [bytes] (symbol (unpack bytes))))
+(extend-custom 4 clojure.lang.Symbol
+  (pack   [s]  (pack (str s)))
+  (unpack [ba] (symbol (unpack ba))))
 
-(extend-msgpack
-  java.lang.Character 5
-  (pack   [c]     (pack (str c)))
-  (unpack [bytes] (first (char-array (unpack bytes)))))
+(extend-custom 5 java.lang.Character
+  (pack   [c]  (pack (str c)))
+  (unpack [ba] (aget (char-array (unpack ba)) 0)))
 
-(extend-msgpack
-  clojure.lang.Ratio 6
-  (pack   [r]     (pack [(numerator r) (denominator r)]))
-  (unpack [bytes] (let [[n d] (unpack bytes)] (/ n d))))
+(extend-custom 6 clojure.lang.Ratio
+  (pack   [r]  (pack [(numerator r) (denominator r)]))
+  (unpack [ba] (let [[n d] (unpack ba)] (/ n d))))
 
-(extend-msgpack
-  clojure.lang.IPersistentSet 7
-  (pack   [s]     (pack (seq s)))
-  (unpack [bytes] (set (unpack bytes))))
+(extend-custom 7 clojure.lang.IPersistentSet
+  (pack   [s]  (pack (seq s)))
+  (unpack [ba] (set (unpack ba))))
 
-(extend-msgpack
-  (class (int-array 0)) 101
-  (pack [ary]
-    (let [buf (ByteBuffer/allocate (* 4 (count ary)))]
-      (.order buf (ByteOrder/nativeOrder))
-      (doseq [v ary] (.putInt buf v))
-      (.array buf)))
+(extend-custom 101 (class (int-array 0))
+  (pack [ar]
+    (let     [bb (ByteBuffer/allocate (* 4 (count ar)))]
+      (.order bb (ByteOrder/nativeOrder))
+      (doseq [v ar] (.putInt bb v))
+      (do           (.array  bb))))
 
-  (unpack [bytes]
-    (let [buf (ByteBuffer/wrap bytes)
-          _ (.order buf (ByteOrder/nativeOrder))
-          int-buf (.asIntBuffer buf)
-          int-ary (int-array (.limit int-buf))]
-      (.get int-buf int-ary)
-      int-ary)))
+  (unpack [ba]
+    (let [bb     (ByteBuffer/wrap ba)
+          _      (.order      bb (ByteOrder/nativeOrder))
+          int-bb (.asIntBbfer bb)
+          int-ar (int-array (.limit int-bb))]
+      (.get int-bb int-ar)
+      (do          int-ar))))
 
-(extend-msgpack
-  (class (float-array 0)) 102
-  (pack [ary]
-    (let [buf (ByteBuffer/allocate (* 4 (count ary)))]
-      (.order buf (ByteOrder/nativeOrder))
-      (doseq [f ary] (.putFloat buf f))
-      (.array buf)))
+(extend-custom 102 (class (float-array 0))
+  (pack [ar]
+    (let     [bb (ByteBuffer/allocate (* 4 (count ar)))]
+      (.order bb (ByteOrder/nativeOrder))
+      (doseq [f ar] (.putFloat bb f))
+      (do           (.array    bb))))
 
-  (unpack [bytes]
-    (let [buf (ByteBuffer/wrap bytes)
-          _ (.order buf (ByteOrder/nativeOrder))
-          float-buf (.asFloatBuffer buf)
-          float-ary (float-array (.limit float-buf))]
-      (.get float-buf float-ary)
-      float-ary)))
+  (unpack [ba]
+    (let [bb       (ByteBuffer/wrap ba)
+          _        (.order        bb (ByteOrder/nativeOrder))
+          float-bb (.asFloatBbfer bb)
+          float-ar (float-array (.limit float-bb))]
+      (.get float-bb float-ar)
+      (do            float-ar))))
 
-(extend-msgpack
-  (class (double-array 0)) 103
-  (pack
-    [ary]
-    (let [buf (ByteBuffer/allocate (* 8 (count ary)))]
-      (.order buf (ByteOrder/nativeOrder))
-      (doseq [v ary] (.putDouble buf v))
-      (.array buf)))
+(extend-custom 103 (class (double-array 0))
+  (pack [ar]
+    (let     [bb (ByteBuffer/allocate (* 8 (count ar)))]
+      (.order bb (ByteOrder/nativeOrder))
+      (doseq [v ar] (.putDouble bb v))
+      (do           (.array     bb))))
 
-  (unpack [bytes]
-    (let [buf (ByteBuffer/wrap bytes)
-          _ (.order buf (ByteOrder/nativeOrder))
-          double-buf (.asDoubleBuffer buf)
-          double-ary (double-array (.limit double-buf))]
-      (.get double-buf double-ary)
-      double-ary)))
+  (unpack [ba]
+    (let [bb        (ByteBuffer/wrap ba)
+          _         (.order         bb (ByteOrder/nativeOrder))
+          double-bb (.asDoubleBbfer bb)
+          double-ar (double-array (.limit double-bb))]
+      (.get double-bb double-ar)
+      (do             double-ar))))

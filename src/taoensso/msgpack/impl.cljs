@@ -3,8 +3,8 @@
    [goog.crypt]
    [goog.math.Long]
    [cljs.reader]
-   [taoensso.msgpack.interfaces
-    :refer [Packable pack-bytes Extended unpack-extended ->Extended]]))
+   [taoensso.msgpack.interfaces :as interfaces
+    :refer [Packable CustomPackable pack-bytes]]))
 
 ;;;; Streams
 
@@ -156,67 +156,67 @@
 
 (defn pack-coll [stream coll] (doseq [x coll] (pack-bytes x stream)))
 
-(defprotocol     IExtendable (extension [this]))
-(extend-protocol IExtendable
-  PersistentHashSet (extension [this] (Extended. 0x07 (pack (vec this))))
-  Keyword           (extension [this] (Extended. 0x03 (pack (.substring (str this) 1))))
-  cljs.core.Symbol  (extension [this] (Extended. 0x04 (pack (str this)))))
+(defprotocol     ICustomPackable (custom [_]))
+(extend-protocol ICustomPackable
+  PersistentHashSet (custom [this] (CustomPackable. 0x07 (pack (vec this))))
+  cljs.core.Symbol  (custom [this] (CustomPackable. 0x04 (pack (str this))))
+  Keyword           (custom [this] (CustomPackable. 0x03 (pack (.substring (str this) 1)))))
 
-(defn pack-extended [s {:keys [type data]}]
-  (let   [len (.-byteLength data)]
+(defn pack-custom [o {:keys [byte-id ba-content]}]
+  (let   [len (.-byteLength ba-content)]
     (case len
-      1  (write-u8 s 0xd4)
-      2  (write-u8 s 0xd5)
-      4  (write-u8 s 0xd6)
-      8  (write-u8 s 0xd7)
-      16 (write-u8 s 0xd8)
+      1  (write-u8 o 0xd4)
+      2  (write-u8 o 0xd5)
+      4  (write-u8 o 0xd6)
+      8  (write-u8 o 0xd7)
+      16 (write-u8 o 0xd8)
       (cond
-        (<= len 0xff)       (doto s (write-u8 0xc7) (write-u8  len))
-        (<= len 0xffff)     (doto s (write-u8 0xc8) (write-u16 len))
-        (<= len 0xffffffff) (doto s (write-u8 0xc9) (write-u32 len))
-        :else (throw (js/Error. "extended type too large to pack"))))
-    (write-u8 s type)
-    (write-1  s data)))
+        (<= len 0xff)       (do (write-u8 o 0xc7) (write-u8  o len))
+        (<= len 0xffff)     (do (write-u8 o 0xc8) (write-u16 o len))
+        (<= len 0xffffffff) (do (write-u8 o 0xc9) (write-u32 o len))
+        :else (throw (js/Error. "custom type too large to pack"))))
+    (write-u8 o byte-id)
+    (write-1  o ba-content)))
 
-(defn pack-seq  [s seq]
+(defn pack-seq  [o seq]
   (let [len (count seq)]
     (cond
-      (<= len 0xf)        (doto s (write-u8 (bit-or 2r10010000 len))     (pack-coll seq))
-      (<= len 0xffff)     (doto s (write-u8 0xdc) (write-u16 len) (pack-coll seq))
-      (<= len 0xffffffff) (doto s (write-u8 0xdd) (write-u32 len) (pack-coll seq))
+      (<= len 0xf)        (do (write-u8 o (bit-or 2r10010000 len))  (pack-coll o seq))
+      (<= len 0xffff)     (do (write-u8 o 0xdc) (write-u16 o len)   (pack-coll o seq))
+      (<= len 0xffffffff) (do (write-u8 o 0xdd) (write-u32 o len)   (pack-coll o seq))
       :else (throw (js/Error. "seq type too large to pack")))))
 
-(defn pack-map [s map]
+(defn pack-map    [o map]
   (let [len   (count map)
         pairs (interleave (keys map) (vals map))]
     (cond
-      (<= len 0xf)        (doto s (write-u8 (bit-or 2r10000000 len))     (pack-coll pairs))
-      (<= len 0xffff)     (doto s (write-u8 0xde) (write-u16 len) (pack-coll pairs))
-      (<= len 0xffffffff) (doto s (write-u8 0xdf) (write-u32 len) (pack-coll pairs))
+      (<= len 0xf)        (do (write-u8 o (bit-or 2r10000000 len)) (pack-coll o pairs))
+      (<= len 0xffff)     (do (write-u8 o 0xde) (write-u16 o len)  (pack-coll o pairs))
+      (<= len 0xffffffff) (do (write-u8 o 0xdf) (write-u32 o len)  (pack-coll o pairs))
       :else (throw (js/Error. "map type too large to pack")))))
 
 (extend-protocol Packable
-  nil      (pack-bytes [_   s] (write-u8 s 0xc0))
-  boolean  (pack-bytes [b   s] (write-u8 s (if b 0xc3 0xc2)))
-  number   (pack-bytes [n   s] (pack-number   s n))
-  string   (pack-bytes [str s] (pack-string   s str))
-  Extended (pack-bytes [ext s] (pack-extended s ext))
+  nil                (pack-bytes [_    o] (write-u8    o       0xc0))
+  boolean            (pack-bytes [b    o] (write-u8    o (if b 0xc3 0xc2)))
+  number             (pack-bytes [n    o] (pack-number o n))
+  string             (pack-bytes [s    o] (pack-string o s))
+  CustomPackable     (pack-bytes [cp   o] (pack-custom o cp))
 
-  Keyword            (pack-bytes [kw   s] (pack-bytes (extension kw)  s))
-  Symbol             (pack-bytes [sym  s] (pack-bytes (extension sym) s))
-  PersistentVector   (pack-bytes [seq  s] (pack-seq s seq))
-  PersistentArrayMap (pack-bytes [amap s] (pack-map s amap))
-  PersistentHashMap  (pack-bytes [hmap s] (pack-map s hmap))
-  PersistentHashSet  (pack-bytes [hset s] (pack-bytes (extension hset) s))
-  List               (pack-bytes [seq  s] (pack-seq s seq))
-  EmptyList          (pack-bytes [seq  s] (pack-seq s seq))
-  LazySeq            (pack-bytes [seq  s] (pack-seq s (vec seq)))
+  Keyword            (pack-bytes [kw   o] (pack-bytes (custom kw)   o))
+  Symbol             (pack-bytes [sym  o] (pack-bytes (custom sym)  o))
+  PersistentHashSet  (pack-bytes [hset o] (pack-bytes (custom hset) o))
+  PersistentVector   (pack-bytes [seq  o] (pack-seq o seq))
+  PersistentArrayMap (pack-bytes [amap o] (pack-map o amap))
+  PersistentHashMap  (pack-bytes [hmap o] (pack-map o hmap))
+  List               (pack-bytes [seq  o] (pack-seq o seq))
+  EmptyList          (pack-bytes [seq  o] (pack-seq o seq))
+  LazySeq            (pack-bytes [seq  o] (pack-seq o (vec seq)))
 
-  js/Uint8Array   (pack-bytes [u8  s] (pack-byte-array s u8))
-  js/Int32Array   (pack-bytes [ary s] (pack-extended   s {:type 101 :data (.-buffer ary)}))
-  js/Float32Array (pack-bytes [ary s] (pack-extended   s {:type 102 :data (.-buffer ary)}))
-  js/Float64Array (pack-bytes [ary s] (pack-extended   s {:type 103 :data (.-buffer ary)}))
-  js/Date         (pack-bytes [d   s] (pack-string     s (.toISOString d))))
+  js/Uint8Array      (pack-bytes [u8   o] (pack-byte-array o u8))
+  js/Int32Array      (pack-bytes [ar   o] (pack-custom     o {:byte-id 101 :ba-content (.-buffer ar)}))
+  js/Float32Array    (pack-bytes [ar   o] (pack-custom     o {:byte-id 102 :ba-content (.-buffer ar)}))
+  js/Float64Array    (pack-bytes [ar   o] (pack-custom     o {:byte-id 103 :ba-content (.-buffer ar)}))
+  js/Date            (pack-bytes [d    o] (pack-string     o (.toISOString d))))
 
 (declare unpack-stream)
 
@@ -284,8 +284,8 @@
 (defn   byte-array-deserializer [buffer] (js/Uint8Array.   buffer))
 
 (defn unpack-ext [stream n]
-  (let   [type (read-u8 stream)]
-    (case type
+  (let   [byte-id (read-u8 stream)]
+    (case byte-id
       3   (keyword-deserializer      (read-1 stream n))
       4   (symbol-deserializer       (read-1 stream n))
       5   (char-deserializer         (read-1 stream n))
@@ -296,8 +296,8 @@
       102 (float-array-deserializer  (read-1 stream n))
       103 (double-array-deserializer (read-1 stream n))
       104 (byte-array-deserializer   (read-1 stream n))
-      ;; else use extension multimethod
-      (unpack-extended (->Extended type (read-1 stream n))))))
+      (interfaces/unpack-custom
+        (interfaces/CustomPackable. byte-id (read-1 stream n))))))
 
 (defn pack
   ([       clj] (let [os (output-stream (js/ArrayBuffer. 2047))] (pack-bytes clj os) (stream->uint8array os)))

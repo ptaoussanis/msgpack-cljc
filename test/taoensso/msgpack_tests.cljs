@@ -2,7 +2,7 @@
   (:require
    [clojure.test :as test :refer [deftest testing is]]
    [taoensso.msgpack :as msg]
-   [taoensso.msgpack.interfaces :refer [->Extended]]))
+   [taoensso.msgpack.interfaces :as interfaces]))
 
 (defmethod test/report [:cljs.test/default :end-run-tests] [m]
   (when-not (test/successful? m)
