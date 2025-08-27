@@ -2,6 +2,7 @@
   (:require [msgpack.interface :refer [Packable pack-bytes unpack-extended ->Extended]])
   (:import
    [msgpack.interface Extended]
+   [java.nio ByteBuffer ByteOrder]
    java.io.ByteArrayInputStream
    java.io.ByteArrayOutputStream
    java.io.DataInput
@@ -253,3 +254,102 @@
     InputStream (unpack (DataInputStream. obj))
     CLASS-OF-PRIMITIVE-BYTE-ARRAY (unpack (ByteArrayInputStream. obj))
     (unpack (byte-array obj))))
+
+;;;;
+
+(defmacro extend-msgpack
+  {:clj-kondo/ignore [:unresolved-symbol]}
+  [class type-num pack-form unpack-form]
+  (let [[pack-fn   pack-args   pack]   pack-form
+        [unpack-fn unpack-args unpack] unpack-form]
+
+    `(let [type# ~type-num]
+       (assert (<= 0 type# 127) "[-1, -128]: reserved for future pre-defined extensions.")
+       (extend-protocol Packable
+         ~class
+         (pack-bytes [~@pack-args s#]
+           (pack-bytes (->Extended type# ~pack) s#)))
+
+       (defmethod unpack-extended type# [ext#]
+         (let [~@unpack-args (:data ext#)]
+           ~unpack)))))
+
+(defn- keyword->str
+  "Convert keyword to string with namespace preserved.
+  Example: :A/A => \"A/A\""
+  [k]
+  (subs (str k) 1))
+
+(extend-msgpack
+  clojure.lang.Keyword 3
+  (pack   [k]     (pack (keyword->str k)))
+  (unpack [bytes] (keyword (unpack bytes))))
+
+(extend-msgpack
+  clojure.lang.Symbol 4
+  (pack   [s]     (pack (str s)))
+  (unpack [bytes] (symbol (unpack bytes))))
+
+(extend-msgpack
+  java.lang.Character 5
+  (pack   [c]     (pack (str c)))
+  (unpack [bytes] (first (char-array (unpack bytes)))))
+
+(extend-msgpack
+  clojure.lang.Ratio 6
+  (pack   [r]     (pack [(numerator r) (denominator r)]))
+  (unpack [bytes] (let [[n d] (unpack bytes)] (/ n d))))
+
+(extend-msgpack
+  clojure.lang.IPersistentSet 7
+  (pack   [s]     (pack (seq s)))
+  (unpack [bytes] (set (unpack bytes))))
+
+(extend-msgpack
+  (class (int-array 0)) 101
+  (pack [ary]
+    (let [buf (ByteBuffer/allocate (* 4 (count ary)))]
+      (.order buf (ByteOrder/nativeOrder))
+      (doseq [v ary] (.putInt buf v))
+      (.array buf)))
+
+  (unpack [bytes]
+    (let [buf (ByteBuffer/wrap bytes)
+          _ (.order buf (ByteOrder/nativeOrder))
+          int-buf (.asIntBuffer buf)
+          int-ary (int-array (.limit int-buf))]
+      (.get int-buf int-ary)
+      int-ary)))
+
+(extend-msgpack
+  (class (float-array 0)) 102
+  (pack [ary]
+    (let [buf (ByteBuffer/allocate (* 4 (count ary)))]
+      (.order buf (ByteOrder/nativeOrder))
+      (doseq [f ary] (.putFloat buf f))
+      (.array buf)))
+
+  (unpack [bytes]
+    (let [buf (ByteBuffer/wrap bytes)
+          _ (.order buf (ByteOrder/nativeOrder))
+          float-buf (.asFloatBuffer buf)
+          float-ary (float-array (.limit float-buf))]
+      (.get float-buf float-ary)
+      float-ary)))
+
+(extend-msgpack
+  (class (double-array 0)) 103
+  (pack
+    [ary]
+    (let [buf (ByteBuffer/allocate (* 8 (count ary)))]
+      (.order buf (ByteOrder/nativeOrder))
+      (doseq [v ary] (.putDouble buf v))
+      (.array buf)))
+
+  (unpack [bytes]
+    (let [buf (ByteBuffer/wrap bytes)
+          _ (.order buf (ByteOrder/nativeOrder))
+          double-buf (.asDoubleBuffer buf)
+          double-ary (double-array (.limit double-buf))]
+      (.get double-buf double-ary)
+      double-ary)))

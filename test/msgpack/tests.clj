@@ -6,8 +6,7 @@
    [clojure.test.check.properties :as prop]
 
    [msgpack.core :as msg]
-   [msgpack.interface :refer [->Extended]]
-   msgpack.extensions))
+   [msgpack.interface :refer [->Extended]]))
 
 (comment
   (remove-ns      'msgpack.tests)
