@@ -264,8 +264,8 @@
       0xde (unpack-map      stream (read-u16 stream))
       0xdf (unpack-map      stream (read-u32 stream))
       (cond
-        (= (bit-and 2r11100000 byte) 2r11100000) byte
-        (= (bit-and 2r10000000 byte) 0)          byte
+        (= (bit-and 2r11100000 byte) 2r11100000) (- byte 0x100) ; -fixnum
+        (= (bit-and 2r10000000 byte) 0)             byte        ; +fixnum
         (= (bit-and 2r11100000 byte) 2r10100000) (read-str stream (bit-and 2r11111 byte))
         (= (bit-and 2r11110000 byte) 2r10010000) (unpack-n        stream (bit-and 2r1111  byte))
         (= (bit-and 2r11110000 byte) 2r10000000) (unpack-map      stream (bit-and 2r1111  byte))
