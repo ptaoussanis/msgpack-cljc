@@ -116,7 +116,14 @@
 
       (<= len 0xf)        (do (.writeByte s (bit-or 2r10000000 len))  (pack-coll pairs s))
       (<= len 0xffff)     (do (.writeByte s 0xde) (.writeShort s len) (pack-coll pairs s))
-      (<= len 0xffffffff) (do (.writeByte s 0xdf) (.writeInt   s len) (pack-coll pairs s)))))
+      (<= len 0xffffffff) (do (.writeByte s 0xdf) (.writeInt   s len) (pack-coll pairs s))))
+
+  Object
+  (pack-bytes [x ^DataOutput o]
+    (pack-bytes
+      {:msgpack/unpackable
+       {:preview (try (let [s (pr-str x)] (subs s 0 (min 20 (count s)))) (catch Throwable _ "<unprintable>"))
+        :type (type x)}} o)))
 
 ;; Note: the extensions below are not in extend-protocol above because of
 ;; a Clojure bug. See http://dev.clojure.org/jira/browse/CLJ-1381
