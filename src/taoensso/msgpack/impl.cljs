@@ -234,7 +234,23 @@
   js/Int32Array      (pack-bytes [ar   o] (pack-custom     o {:byte-id 101 :ba-content (.-buffer ar)}))
   js/Float32Array    (pack-bytes [ar   o] (pack-custom     o {:byte-id 102 :ba-content (.-buffer ar)}))
   js/Float64Array    (pack-bytes [ar   o] (pack-custom     o {:byte-id 103 :ba-content (.-buffer ar)}))
-  js/Date            (pack-bytes [d    o] (pack-string     o (.toISOString d))))
+  js/Date            (pack-bytes [d    o] (pack-string     o (.toISOString d)))
+
+  default
+  (pack-bytes  [x o]
+    (if (seqable? x)
+      (pack-seq o x)
+      (pack-bytes
+        (let [ctor (type x)]
+          (custom
+            {:msgpack/unpackable
+             {:preview (try (let [s (pr-str x)] (subs s 0 (min 20 (count s)))) (catch :default _ "<unprintable>"))
+              :type
+              (or
+                (.-name ctor) (.-displayName ctor) (goog/typeOf x)
+                (try (pr-str ctor) (catch :default _ nil))
+                "<unknown>")}}))
+        o))))
 
 (declare unpack-stream)
 
