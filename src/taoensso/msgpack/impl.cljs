@@ -25,6 +25,7 @@
   (read-i16   [_])
   (read-u32   [_])
   (read-i32   [_])
+  (read-u64   [_])
   (read-i64   [_])
   (read-f32   [_])
   (read-f64   [_])
@@ -38,6 +39,7 @@
   (write-i16 [_ i16])
   (write-u32 [_ u32])
   (write-i32 [_ i32])
+  (write-u64 [_ u64])
   (write-i64 [_ i64])
   (write-f64 [_ f64]))
 
@@ -62,13 +64,21 @@
   (read-i16   [this] (let [i16 (.getInt16   bytes offset false)] (inc-offset! this 2) i16))
   (read-u32   [this] (let [u32 (.getUint32  bytes offset false)] (inc-offset! this 4) u32))
   (read-i32   [this] (let [i32 (.getInt32   bytes offset false)] (inc-offset! this 4) i32))
+
   (read-f32   [this] (let [f32 (.getFloat32 bytes offset false)] (inc-offset! this 4) f32))
   (read-f64   [this] (let [f64 (.getFloat64 bytes offset false)] (inc-offset! this 8) f64))
-  (read-i64   [this]
-    (let [high-bits (.getInt32 bytes    offset    false)
-          low-bits  (.getInt32 bytes (+ offset 4) false)]
+
+  (read-u64   [this]
+    (let [hi (.getUint32 bytes    offset    false)
+          lo (.getUint32 bytes (+ offset 4) false)]
       (inc-offset! this 8)
-      (.toNumber (goog.math.Long. low-bits high-bits)))))
+      (+ (* hi 0x100000000) lo)))
+
+  (read-i64 [this]
+    (let [hi (.getInt32 bytes    offset    false)
+          lo (.getInt32 bytes (+ offset 4) false)]
+      (inc-offset! this 8)
+      (.toNumber (goog.math.Long. lo hi)))))
 
 (deftype MsgpackOutputStream
   [^:unsynchronized-mutable bytes
@@ -101,11 +111,19 @@
   (write-u32 [this u32] (resize-on-demand! this 4) (.setUint32  bytes offset u32 false) (inc-offset! this 4))
   (write-i32 [this i32] (resize-on-demand! this 4) (.setInt32   bytes offset i32 false) (inc-offset! this 4))
   (write-f64 [this f64] (resize-on-demand! this 8) (.setFloat64 bytes offset f64 false) (inc-offset! this 8))
-  (write-i64 [this u64]
-    ;; msgpack stores integers in big-endian
-    (let [glong (.fromNumber goog.math.Long u64)]
-      (write-i32 this ^js/Number (.getHighBits glong))
-      (write-i32 this ^js/Number (.getLowBits  glong)))))
+
+  (write-u64 [this u64] ; round if |n| > js/Number.MAX_SAFE_INTEGER
+    (let [raw-hi (Math/floor (/ u64 0x100000000))
+          hi     (min raw-hi 0xFFFFFFFF)
+          raw-lo (Math/floor (- u64 (* hi 0x100000000)))
+          lo     (min (max raw-lo 0) 0xFFFFFFFF)]
+      (write-u32 this hi)
+      (write-u32 this lo)))
+
+  (write-i64 [this i64] ; round if |n| > js/Number.MAX_SAFE_INTEGER
+    (let [gl (goog.math.Long.fromNumber i64)]
+      (write-i32 this (.getHighBits gl))
+      (write-i32 this (.getLowBits  gl)))))
 
 (defn  input-stream [input]  (MsgpackInputStream.  (js/DataView. input)  0))
 (defn output-stream [output] (MsgpackOutputStream. (js/DataView. output) 0))
@@ -130,7 +148,7 @@
     (<=   0 i 0xff)               (doto stream (write-u8 0xcc) (write-u8  i)) ; uint 8
     (<=   0 i 0xffff)             (doto stream (write-u8 0xcd) (write-u16 i)) ; uint 16
     (<=   0 i 0xffffffff)         (doto stream (write-u8 0xce) (write-u32 i)) ; uint 32
-    (<=   0 i 0xffffffffffffffff) (doto stream (write-u8 0xcf) (write-i64 i)) ; uint 64
+    (<=   0 i 0xffffffffffffffff) (doto stream (write-u8 0xcf) (write-u64 i)) ; uint 64
     (<= -0x80               i -1) (doto stream (write-u8 0xd0) (write-i8  i)) ; int 8
     (<= -0x8000             i -1) (doto stream (write-u8 0xd1) (write-i16 i)) ; int 16
     (<= -0x80000000         i -1) (doto stream (write-u8 0xd2) (write-i32 i)) ; int 32
@@ -246,7 +264,7 @@
       0xcc (read-u8  stream)
       0xcd (read-u16 stream)
       0xce (read-u32 stream)
-      0xcf (read-i64 stream)
+      0xcf (read-u64 stream)
       0xd0 (read-i8  stream)
       0xd1 (read-i16 stream)
       0xd2 (read-i32 stream)
