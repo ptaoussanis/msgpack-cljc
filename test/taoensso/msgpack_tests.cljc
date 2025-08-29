@@ -85,15 +85,15 @@
       (rt? "bin16" (ubytes 256))
       (rt? "bin32" (ubytes 65536))])
 
-   (testing "Custom types"
-     [(is (let [ub (ubytes     1)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes     2)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes     4)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes     8)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes    16)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes   255)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes   256)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))
-      (is (let [ub (ubytes 65536)] (eq ub (:ba-content (rt (i/->CustomPackable 106 ub))))))])])
+   (testing "Ext types"
+     [(is (let [ub (ubytes     1)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes     2)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes     4)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes     8)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes    16)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes   255)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes   256)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
+      (is (let [ub (ubytes 65536)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))])])
 
 #?(:cljs
    (defmethod test/report [:cljs.test/default :end-run-tests] [m]
