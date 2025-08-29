@@ -346,3 +346,26 @@
 (i/extend-packable 7 js/Float64Array
   (pack   [a]  (.-buffer a))
   (unpack [ba] (js/Float64Array. ba)))
+
+(i/extend-packable -1 js/Date
+  (pack [d]
+    (let [millis (.getTime d)
+          secs   (js/Math.floor (/ millis 1000))
+          nanos  (* (- millis   (* secs   1000)) 1000000)
+          buffer (js/ArrayBuffer. 12)
+          view   (js/DataView. buffer)
+          long-secs (goog.math.Long.fromNumber secs)]
+      (.setUint32 view 0 nanos false)
+      (.setInt32  view 4 (.getHighBits long-secs) false)
+      (.setInt32  view 8 (.getLowBits  long-secs) false)
+      buffer))
+
+  (unpack [ba]
+    (let [view  (js/DataView. ba)
+          nanos (.getUint32 view 0 false)
+          hi    (.getInt32  view 4 false)
+          lo    (.getInt32  view 8 false)
+          long-secs (goog.math.Long. lo hi)
+          secs      (.toNumber long-secs)
+          millis (+ (* secs 1000) (/ nanos 1000000))]
+      (js/Date. millis))))

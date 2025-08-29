@@ -293,6 +293,21 @@
       (.get double-bb double-ar)
       (do             double-ar))))
 
+(defn- instant->ba [^java.time.Instant i]
+  (let [bb (ByteBuffer/allocate 12)]
+    (.putInt  bb (.getNano        i))
+    (.putLong bb (.getEpochSecond i))
+    (.array   bb)))
+
+(i/extend-packable -1 java.util.Date (pack [d] (instant->ba (.toInstant d))))
+(i/extend-packable -1 java.time.Instant
+  (pack   [i] (instant->ba i))
+  (unpack [ba]
+    (let  [bb (ByteBuffer/wrap ba)
+           nanos (.getInt  bb)
+           secs  (.getLong bb)]
+      (java.time.Instant/ofEpochSecond secs nanos))))
+
 (comment
   (require '[taoensso.encore :as enc])
   (let [x [nil {:a :A :b :B :c "foo", :v (vec (range 128)), :s (set (range 128))}]]

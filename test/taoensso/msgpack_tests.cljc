@@ -26,7 +26,12 @@
 
 (defn eq
   ([x y] (= (eq x) (eq y)))
-  ([x  ] (or (byte-vec x) #?(:clj (when (instance? java.math.BigDecimal x) (double x))) x)))
+  ([x  ]
+   (or
+     (byte-vec x)
+     #?(:clj (when (instance? java.util.Date       x) (.toInstant x)))
+     #?(:clj (when (instance? java.math.BigDecimal x) (double     x)))
+     x)))
 
 (defn rt  "Roundtrip"   [x] (mp/unpack (mp/pack x)))
 (defn rt? "Roundtrips?" [& xs] (mapv #(is (eq % (rt %)) (str {:type (type %), :value %})) xs))
@@ -93,7 +98,10 @@
       (is (let [ub (ubytes    16)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
       (is (let [ub (ubytes   255)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
       (is (let [ub (ubytes   256)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))
-      (is (let [ub (ubytes 65536)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))])])
+      (is (let [ub (ubytes 65536)] (eq ub (:ba-content (rt (i/->PackableExt 106 ub))))))])
+
+   #?(:clj  (is (rt? "Timestamps" (java.time.Instant/now) (java.util.Date.) (java.util.Date. -1))))
+   #?(:cljs (is (rt? "Timestamps" (js/Date.))))])
 
 #?(:cljs
    (defmethod test/report [:cljs.test/default :end-run-tests] [m]
