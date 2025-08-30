@@ -15,8 +15,8 @@
      "1 arity: returns MessagePack-encoded Uint8Array for given Cljs value.
       2 arity: writes  MessagePack-encoded bytes      for given Cljs value to
         given output ∈ #{ArrayBuffer} and returns output."
-     ([       clj] (impl/pack        clj))
-     ([output clj] (impl/pack output clj) output)))
+     ([       clj] (impl/pack clj))
+     ([output clj] (impl/pack clj output) output)))
 
 #?(:clj
    (defn unpack
