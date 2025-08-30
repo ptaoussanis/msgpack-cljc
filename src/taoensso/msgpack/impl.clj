@@ -146,18 +146,18 @@
       0xc3 true
 
       ;; Ints
-      0xcc (read-u8    in)
-      0xcd (read-u16   in)
-      0xce (read-u32   in)
-      0xcf (read-u64   in)
-      0xd0 (.readByte  in)
-      0xd1 (.readShort in)
-      0xd2 (.readInt   in)
-      0xd3 (.readLong  in)
+      0xcc (long (read-u8    in))
+      0xcd (long (read-u16   in))
+      0xce (long (read-u32   in))
+      0xcf       (read-u64   in)
+      0xd0 (long (.readByte  in))
+      0xd1 (long (.readShort in))
+      0xd2 (long (.readInt   in))
+      0xd3       (.readLong  in)
 
       ;; Floats
-      0xca (.readFloat  in)
-      0xcb (.readDouble in)
+      0xca (double (.readFloat  in))
+      0xcb         (.readDouble in)
 
       ;; Strings
       0xd9 (read-str (read-u8  in) in)
