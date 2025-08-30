@@ -7,8 +7,8 @@
      "1 arity: returns MessagePack-encoded byte[] for given Clj value.
       2 arity: writes  MessagePack-encoded bytes  for given Clj value to
         given output ∈ #{DataOutput OutputStream} and returns output."
-     (^bytes [clj] (impl/pack        clj))
-     ([output clj] (impl/pack output clj) output))
+     (^bytes [clj] (impl/pack clj))
+     ([output clj] (impl/pack clj output) output))
 
    :cljs
    (defn pack
